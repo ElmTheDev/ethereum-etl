@@ -64,6 +64,13 @@ class PostgresItemExporter:
 
 def group_by_item_type(items):
     result = collections.defaultdict(list)
+
+    if isinstance(items, dict):
+        for key in items:
+            result[items[key]].append(items)
+
+        return result
+
     for item in items:
         result[item.get('type')].append(item)
 

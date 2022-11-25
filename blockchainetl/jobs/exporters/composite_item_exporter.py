@@ -25,6 +25,13 @@ from blockchainetl.atomic_counter import AtomicCounter
 from blockchainetl.exporters import CsvItemExporter, JsonLinesItemExporter
 from blockchainetl.file_utils import get_file_handle, close_silently
 from blockchainetl.jobs.exporters.converters.composite_item_converter import CompositeItemConverter
+from blockchainetl.jobs.exporters.converters.int_to_decimal_item_converter import IntToDecimalItemConverter
+from blockchainetl.jobs.exporters.converters.list_field_item_converter import ListFieldItemConverter
+from blockchainetl.jobs.exporters.converters.unix_timestamp_item_converter import UnixTimestampItemConverter
+from blockchainetl.jobs.exporters.postgres_item_exporter import PostgresItemExporter
+from blockchainetl.streaming.postgres_utils import create_insert_statement_for_table
+from ethereumetl.streaming.postgres_tables import TRANSACTIONS, LOGS, TOKEN_TRANSFERS_EXPORT, TRACES, TOKENS, CONTRACTS, \
+    BLOCKS, TOKEN_TRANSFERS
 
 
 class CompositeItemExporter:
@@ -41,16 +48,34 @@ class CompositeItemExporter:
         self.logger = logging.getLogger('CompositeItemExporter')
 
     def open(self):
-        for item_type, filename in self.filename_mapping.items():
-            file = get_file_handle(filename, binary=True)
-            fields = self.field_mapping.get(item_type)
-            self.file_mapping[item_type] = file
-            if str(filename).endswith('.json'):
-                item_exporter = JsonLinesItemExporter(file, fields_to_export=fields)
-            else:
-                item_exporter = CsvItemExporter(file, fields_to_export=fields)
-            self.exporter_mapping[item_type] = item_exporter
 
+        for item_type, filename in self.filename_mapping.items():
+
+            if str(filename).startswith("postgres"):
+                item_exporter = PostgresItemExporter(
+                    filename, item_type_to_insert_stmt_mapping={
+                        'block': create_insert_statement_for_table(BLOCKS),
+                        'transaction': create_insert_statement_for_table(TRANSACTIONS),
+                        'log': create_insert_statement_for_table(LOGS),
+                        'token_transfer': create_insert_statement_for_table(TOKEN_TRANSFERS),
+                        'token_transfer_export': create_insert_statement_for_table(TOKEN_TRANSFERS_EXPORT),
+                        'trace': create_insert_statement_for_table(TRACES),
+                        'token': create_insert_statement_for_table(TOKENS),
+                        'contract': create_insert_statement_for_table(CONTRACTS),
+                    },
+                    converters=[UnixTimestampItemConverter(), IntToDecimalItemConverter(),
+                                ListFieldItemConverter('topics', 'topic', fill=4)])
+            else:
+                file = get_file_handle(filename, binary=True)
+                fields = self.field_mapping.get(item_type)
+                self.file_mapping[item_type] = file
+
+                if str(filename).endswith('.json'):
+                    item_exporter = JsonLinesItemExporter(file, fields_to_export=fields)
+                else:
+                    item_exporter = CsvItemExporter(file, fields_to_export=fields)
+
+            self.exporter_mapping[item_type] = item_exporter
             self.counter_mapping[item_type] = AtomicCounter()
 
     def export_items(self, items):
@@ -65,7 +90,13 @@ class CompositeItemExporter:
         exporter = self.exporter_mapping.get(item_type)
         if exporter is None:
             raise ValueError('Exporter for item type {} not found'.format(item_type))
-        exporter.export_item(self.converter.convert_item(item))
+
+        try:
+            exporter.export_item(self.converter.convert_item(item))
+        except AttributeError:
+            exporter.export_items(self.converter.convert_item(item))
+        else:
+            raise ValueError('Unsupported exporter')
 
         counter = self.counter_mapping.get(item_type)
         if counter is not None:

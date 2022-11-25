@@ -105,6 +105,17 @@ TOKEN_TRANSFERS = Table(
     Column('block_hash', String),
 )
 
+TOKEN_TRANSFERS_EXPORT = Table(
+    'token_transfers_export', metadata,
+    Column('token_address', String),
+    Column('from_address', String),
+    Column('to_address', String),
+    Column('value', Numeric(78)),
+    Column('transaction_hash', String, primary_key=True),
+    Column('log_index', BigInteger, primary_key=True),
+    Column('block_number', BigInteger),
+)
+
 TRACES = Table(
     'traces', metadata,
     Column('transaction_hash', String),
