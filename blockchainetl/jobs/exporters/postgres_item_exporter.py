@@ -55,7 +55,7 @@ class PostgresItemExporter:
             yield self.converter.convert_item(item)
 
     def create_engine(self):
-        engine = create_engine(self.connection_url, echo=self.print_sql, pool_recycle=3600)
+        engine = create_engine(self.connection_url, pool_recycle=3600)
         return engine
 
     def close(self):

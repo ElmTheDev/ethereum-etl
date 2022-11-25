@@ -63,7 +63,7 @@ class ProgressLogger:
             percentage = processed_items * 100 / self.total_items
             percentage_before = processed_items_before * 100 / self.total_items
             if int(percentage_before / self.log_percentage_step) != int(percentage / self.log_percentage_step):
-                track_message = '{} items processed. Progress is {}%'.format(processed_items, int(percentage)) + \
+                track_message = '{} items processed. Progress is {}%'.format(processed_items, percentage) + \
                                 ('!!!' if int(percentage) > 100 else '.')
 
         if track_message is not None:
